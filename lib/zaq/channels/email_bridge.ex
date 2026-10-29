@@ -54,17 +54,22 @@ defmodule Zaq.Channels.EmailBridge do
 
   @impl true
   def build_runtime_specs(config) do
-    bridge_id = runtime_bridge_id(config)
     provider = Map.get(config, :provider) || Map.get(config, "provider")
 
-    with {:ok, adapter} <- adapter_for(provider),
-         {:ok, prepared_config} <- normalize_imap_config(config) do
-      adapter.runtime_specs(
-        prepared_config,
-        bridge_id,
-        sink_mfa: {__MODULE__, :from_listener, []},
-        sink_opts: [bridge_id: bridge_id]
-      )
+    if provider in ["email:smtp", :"email:smtp"] do
+      {:ok, {nil, []}}
+    else
+      bridge_id = runtime_bridge_id(config)
+
+      with {:ok, adapter} <- adapter_for(provider),
+           {:ok, prepared_config} <- normalize_imap_config(config) do
+        adapter.runtime_specs(
+          prepared_config,
+          bridge_id,
+          sink_mfa: {__MODULE__, :from_listener, []},
+          sink_opts: [bridge_id: bridge_id]
+        )
+      end
     end
   end
 
