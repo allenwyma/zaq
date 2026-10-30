@@ -30,11 +30,15 @@ defmodule Zaq.Channels.EmailBridge do
   alias Zaq.Utils.EmailUtils
 
   @impl Zaq.Channels.CommunicationBridge
-  def incoming_routing(%{provider: "email:imap"} = config) do
-    %{
-      incoming?: true,
-      topics: ImapConfigHelpers.selected_mailboxes_for_listener(config)
-    }
+  def incoming_routing(config) when is_map(config) do
+    if config_provider(config) in ["email:imap", :"email:imap", :email] do
+      %{
+        incoming?: true,
+        topics: ImapConfigHelpers.selected_mailboxes_for_listener(config)
+      }
+    else
+      %{incoming?: false, topics: []}
+    end
   end
 
   def incoming_routing(_config), do: %{incoming?: false, topics: []}
@@ -54,11 +58,8 @@ defmodule Zaq.Channels.EmailBridge do
 
   @impl true
   def build_runtime_specs(config) do
-    provider = Map.get(config, :provider) || Map.get(config, "provider")
-
-    if provider in ["email:smtp", :"email:smtp"] do
-      {:ok, {nil, []}}
-    else
+    if incoming_routing(config).incoming? do
+      provider = config_provider(config)
       bridge_id = runtime_bridge_id(config)
 
       with {:ok, adapter} <- adapter_for(provider),
@@ -70,6 +71,8 @@ defmodule Zaq.Channels.EmailBridge do
           sink_opts: [bridge_id: bridge_id]
         )
       end
+    else
+      {:ok, {nil, []}}
     end
   end
 

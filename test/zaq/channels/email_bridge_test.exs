@@ -1766,6 +1766,35 @@ defmodule Zaq.Channels.EmailBridgeTest do
   end
 
   describe "start_runtime/1" do
+    test "inbound classification and runtime specs support accepted provider representations" do
+      original = Application.get_env(:zaq, :channels)
+      on_exit(fn -> Application.put_env(:zaq, :channels, original) end)
+
+      Application.put_env(:zaq, :channels, %{
+        email: %{adapter: RuntimeCaptureAdapterStub},
+        email_imap: %{adapter: RuntimeCaptureAdapterStub}
+      })
+
+      for key <- [:provider, "provider"],
+          provider <- ["email:imap", :"email:imap", :email],
+          mailboxes <- [[], ["INBOX"]] do
+        config = %{key => provider, :selected_mailboxes => mailboxes}
+
+        assert EmailBridge.incoming_routing(config) == %{incoming?: true, topics: mailboxes}
+        assert {:ok, {nil, []}} = EmailBridge.build_runtime_specs(config)
+        assert_receive {:captured_runtime_config, %{selected_mailboxes: ^mailboxes}}
+      end
+
+      for key <- [:provider, "provider"],
+          provider <- ["email:smtp", :"email:smtp", "email:other"] do
+        config = %{key => provider, :selected_mailboxes => ["INBOX"]}
+
+        assert EmailBridge.incoming_routing(config) == %{incoming?: false, topics: []}
+        assert {:ok, {nil, []}} = EmailBridge.build_runtime_specs(config)
+        refute_received {:captured_runtime_config, _}
+      end
+    end
+
     test "SMTP configs do not build IMAP listener specs even with mailbox settings" do
       config = %{
         id: System.unique_integer([:positive]),
